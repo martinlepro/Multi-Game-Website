@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Battleship Tutorial</title>
+<style>
+body {
+    font-family: Arial;
+    background: #0b1f33;
+    color: white;
+    text-align: center;
+}
+
+h1 {
+    margin-top: 20px;
+}
+
+#grid {
+    display: grid;
+    grid-template-columns: repeat(10, 40px);
+    gap: 2px;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.cell {
+    width: 40px;
+    height: 40px;
+    background: #1e3a5f;
+    cursor: pointer;
+    position: relative;
+}
+
+.cell.hit {
+    background-color: red;
+}
+
+.cell.miss {
+    background-color: #999;
+}
+
+.cell.possible {
+    background-color: rgba(0, 255, 255, 0.2);
+}
+
+.ship-remaining {
+    margin-top: 20px;
+}
+
+select {
+    margin-top: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<h1 id="title">Tutoriel Bataille Navale</h1>
+
+<select onchange="changeLang(this.value)">
+    <option value="fr">Français</option>
+    <option value="en">English</option>
+    <option value="es">Español</option>
+</select>
+
+<div id="grid"></div>
+
+<div class="ship-remaining" id="ships"></div>
+
+<div id="strategy"></div>
+
+<script>
+const translations = {
+    fr: {
+        title: "Tutoriel Bataille Navale",
+        ships: "Bateaux restants",
+        strategy: "Zones les plus probables"
+    },
+    en: {
+        title: "Battleship Tutorial",
+        ships: "Remaining ships",
+        strategy: "Most probable zones"
+    },
+    es: {
+        title: "Tutorial de Batalla Naval",
+        ships: "Barcos restantes",
+        strategy: "Zonas más probables"
+    }
+};
+
+let currentLang = "fr";
+
+function changeLang(lang) {
+    currentLang = lang;
+    document.getElementById("title").innerText = translations[lang].title;
+    updateShips();
+    updateStrategy();
+}
+
+const grid = document.getElementById("grid");
+
+let board = [];
+let ships = {
+    carrier: 5,
+    battleship: 4,
+    cruiser: 3,
+    submarine: 3,
+    destroyer: 2
+};
+
+function createGrid() {
+    for (let i = 0; i < 100; i++) {
+        let cell = document.createElement("div");
+        cell.classList.add("cell");
+
+        cell.addEventListener("click", () => toggleCell(cell, i));
+
+        grid.appendChild(cell);
+        board.push("empty");
+    }
+}
+
+function toggleCell(cell, index) {
+    if (board[index] === "empty") {
+        board[index] = "miss";
+        cell.classList.add("miss");
+    } else if (board[index] === "miss") {
+        board[index] = "hit";
+        cell.classList.remove("miss");
+        cell.classList.add("hit");
+    } else {
+        board[index] = "empty";
+        cell.classList.remove("hit");
+    }
+
+    updateStrategy();
+}
+
+function updateShips() {
+    let text = translations[currentLang].ships + "<br>";
+    for (let ship in ships) {
+        text += ship + " (" + ships[ship] + " cases)<br>";
+    }
+    document.getElementById("ships").innerHTML = text;
+}
+
+function updateStrategy() {
+    document.querySelectorAll(".cell").forEach(c => c.classList.remove("possible"));
+
+    let probs = new Array(100).fill(0);
+
+    for (let ship in ships) {
+        let size = ships[ship];
+
+        for (let i = 0; i < 100; i++) {
+            if (canPlace(i, size, true)) {
+                for (let j = 0; j < size; j++) {
+                    probs[i + j]++;
+                }
+            }
+
+            if (canPlace(i, size, false)) {
+                for (let j = 0; j < size; j++) {
+                    probs[i + j * 10]++;
+                }
+            }
+        }
+    }
+
+    let max = Math.max(...probs);
+
+    probs.forEach((p, i) => {
+        if (p === max && p > 0) {
+            grid.children[i].classList.add("possible");
+        }
+    });
+
+    document.getElementById("strategy").innerText =
+        translations[currentLang].strategy;
+}
+
+function canPlace(index, size, horizontal) {
+    let row = Math.floor(index / 10);
+    let col = index % 10;
+
+    if (horizontal) {
+        if (col + size > 10) return false;
+        for (let i = 0; i < size; i++) {
+            if (board[index + i] === "miss") return false;
+        }
+    } else {
+        if (row + size > 10) return false;
+        for (let i = 0; i < size; i++) {
+            if (board[index + i * 10] === "miss") return false;
+        }
+    }
+
+    return true;
+}
+
+createGrid();
+updateShips();
+updateStrategy();
+</script>
+
+</body>
+</html>
