@@ -8,26 +8,24 @@
 
   <link rel="stylesheet" href="style.css" />
 
-  <!-- OCR gratuit côté navigateur -->
+  <!-- Tesseract.js OCR gratuit -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 
 <body>
   <header class="hero">
-    <h1 id="pageTitle">🚢 Battleship Tutorial & Solver</h1>
+    <h1 id="title">🚢 Battleship Tutorial & Solver</h1>
     <p id="subtitle">
-      Analyse toutes les positions possibles des bateaux restants et trouve les meilleurs tirs.
+      Analyse intelligente des possibilités de placement des bateaux.
     </p>
 
-    <div class="language-bar">
-      <label for="languageSelect">🌍 Langue :</label>
+    <div class="toolbar">
+      <label for="languageSelect">🌍 Langue</label>
       <select id="languageSelect">
         <option value="fr">Français</option>
         <option value="en">English</option>
         <option value="es">Español</option>
         <option value="de">Deutsch</option>
-        <option value="it">Italiano</option>
-        <option value="pt">Português</option>
       </select>
     </div>
   </header>
@@ -37,108 +35,78 @@
     <section class="panel">
       <h2 id="gridTitle">Grille</h2>
 
-      <div class="tools">
-        <button id="modeUnknown">❔ Inconnu</button>
-        <button id="modeMiss">🌊 Eau</button>
-        <button id="modeHit">🔥 Touché</button>
-        <button id="modeSunk">💀 Coulé</button>
+      <div class="mode-buttons">
+        <button class="mode active" data-mode="unknown">❔ Inconnu</button>
+        <button class="mode" data-mode="miss">🌊 Eau</button>
+        <button class="mode" data-mode="hit">🔥 Touché</button>
+        <button class="mode" data-mode="sunk">💀 Coulé</button>
       </div>
 
       <div id="board" class="board"></div>
 
       <div class="legend">
-        <span><b class="legend-box unknown"></b> Inconnu</span>
-        <span><b class="legend-box miss"></b> Eau</span>
-        <span><b class="legend-box hit"></b> Touché</span>
-        <span><b class="legend-box sunk"></b> Coulé</span>
-        <span><b class="legend-box best"></b> Meilleur tir</span>
+        <span><b class="box unknown"></b> Inconnu</span>
+        <span><b class="box miss"></b> Eau</span>
+        <span><b class="box hit"></b> Touché</span>
+        <span><b class="box sunk"></b> Coulé</span>
+        <span><b class="box best"></b> Meilleur tir</span>
       </div>
     </section>
 
     <section class="panel">
-      <h2 id="shipsTitle">Bateaux restants</h2>
-
-      <div id="shipsList"></div>
+      <h2>Bateaux restants</h2>
+      <div id="ships"></div>
 
       <hr />
 
-      <h2 id="analysisTitle">Analyse</h2>
+      <h2>Analyse</h2>
+      <p>Placements possibles : <strong id="totalPlacements">0</strong></p>
+      <p>Meilleur tir : <strong id="bestShot">Aucun</strong></p>
+      <p>Score : <strong id="bestScore">0</strong></p>
 
-      <div class="stats">
-        <p>
-          <strong>Positions possibles :</strong>
-          <span id="totalPlacements">0</span>
-        </p>
-
-        <p>
-          <strong>Meilleur tir :</strong>
-          <span id="bestShot">A1</span>
-        </p>
-
-        <p>
-          <strong>Score :</strong>
-          <span id="bestScore">0</span>
-        </p>
-      </div>
-
-      <button id="recalculateBtn">🔁 Recalculer</button>
-      <button id="resetBtn">🧹 Réinitialiser</button>
+      <button id="recalculateBtn">🧠 Recalculer</button>
+      <button id="resetBtn">♻️ Réinitialiser</button>
     </section>
 
     <section class="panel wide">
-      <h2>📷 Import depuis capture d’écran / photo</h2>
+      <h2>Import / Export JSON</h2>
 
-      <p>
-        Tu peux importer une image. Le système contient déjà une base avec OCR gratuit via Tesseract.js.
-        Pour une vraie reconnaissance visuelle intelligente, on peut ensuite brancher Mistral Vision ou une autre IA.
-      </p>
+      <div class="json-buttons">
+        <button id="exportBtn">📤 Exporter JSON</button>
+        <button id="importBtn">📥 Importer JSON</button>
+      </div>
+
+      <textarea id="jsonArea" placeholder="JSON ici..."></textarea>
+    </section>
+
+    <section class="panel wide">
+      <h2>Analyse image / capture écran</h2>
 
       <input type="file" id="imageInput" accept="image/*" />
 
-      <div class="image-actions">
-        <button id="ocrBtn">🔍 Lire l’image avec OCR gratuit</button>
-        <button id="mockAiBtn">🤖 Simuler analyse IA</button>
+      <div class="json-buttons">
+        <button id="ocrBtn">🔎 Lire avec Tesseract.js</button>
+        <button id="colorDetectBtn">🎨 Détecter par couleurs</button>
       </div>
 
-      <textarea id="ocrOutput" placeholder="Résultat OCR ou IA..." rows="8"></textarea>
+      <textarea id="ocrOutput" placeholder="Résultat OCR..."></textarea>
+
+      <p class="hint">
+        Tesseract lit le texte. Pour une grille colorée, utilise plutôt
+        « Détecter par couleurs ».
+      </p>
     </section>
 
     <section class="panel wide">
-      <h2>💾 Import / Export JSON</h2>
+      <h2>Tutoriel rapide</h2>
 
-      <div class="json-actions">
-        <button id="exportBtn">⬇️ Exporter JSON</button>
-        <button id="importBtn">⬆️ Importer JSON</button>
-      </div>
-
-      <textarea id="jsonBox" rows="12" placeholder="Le JSON apparaîtra ici..."></textarea>
-    </section>
-
-    <section class="panel wide">
-      <h2 id="tutorialTitle">Tutoriel complet</h2>
-
-      <article id="tutorialContent">
-        <h3>But du jeu</h3>
-        <p>
-          Le but de Battleship est de trouver et couler tous les bateaux adverses.
-          Chaque joueur tire sur une case. Si un bateau est présent, c’est un touché.
-          Sinon, c’est de l’eau.
-        </p>
-
-        <h3>Stratégie intelligente</h3>
-        <p>
-          Ce solveur calcule toutes les positions où chaque bateau restant pourrait encore être placé,
-          en tenant compte des cases déjà ratées, touchées ou coulées.
-        </p>
-
-        <h3>Comment utiliser la grille</h3>
-        <ol>
-          <li>Sélectionne un mode : inconnu, eau, touché ou coulé.</li>
-          <li>Clique sur les cases de la grille pour reproduire ta partie.</li>
-          <li>Coche ou décoche les bateaux encore en jeu.</li>
-          <li>Le solveur calcule les meilleures cases à viser.</li>
-        </ol>
-      </article>
+      <ol id="tutorial">
+        <li>Choisis un mode : eau, touché ou coulé.</li>
+        <li>Clique sur les cases de la grille.</li>
+        <li>Quand un bateau est coulé, les cases autour deviennent automatiquement de l’eau.</li>
+        <li>Le solveur calcule toutes les positions possibles des bateaux restants.</li>
+        <li>La case jaune est le meilleur tir conseillé.</li>
+      </ol>
     </section>
 
   </main>
