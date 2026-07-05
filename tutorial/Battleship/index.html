@@ -298,6 +298,13 @@
     <h1>🚢 Battleship Tutorial & Solver</h1>
     <p>Analyse toutes les positions possibles et conseille le meilleur tir.</p>
   </header>
+<label>
+  Taille grille :
+  <input id="gridSizeInput" type="number" min="5" max="30" value="10" onchange="changeGridSizeManual()" />
+</label>
+
+<button onclick="autoDetectImageGrid()">🔍 Détection universelle</button>
+<button onclick="resetBoard()">♻️ Reset</button>
 
   <main>
     <section>
@@ -368,7 +375,9 @@
   </main>
 
   <script>
-    const SIZE = 10;
+    let SIZE = 10;
+    let detectedGrid = null;
+
 
     const SHIPS = [
       {
@@ -420,6 +429,340 @@
     function coordToIndex(row, col) {
       return row * SIZE + col;
     }
+
+    function changeGridSizeManual() {
+  const input = document.getElementById("gridSizeInput");
+  const newSize = parseInt(input.value, 10);
+
+  if (!newSize || newSize < 5 || newSize > 30) {
+    alert("Taille invalide. Choisis entre 5 et 30.");
+    return;
+  }
+
+  SIZE = newSize;
+  board = Array(SIZE * SIZE).fill("unknown");
+
+  createGrid();
+  solveBoard();
+}
+
+function resetBoard() {
+  board = Array(SIZE * SIZE).fill("unknown");
+  createGrid();
+  solveBoard();
+}
+
+function coordToIndex(row, col) {
+  return row * SIZE + col;
+}
+
+function indexToCoord(index) {
+  const row = Math.floor(index / SIZE);
+  const col = index % SIZE;
+
+  return {
+    row,
+    col,
+    label: String.fromCharCode(65 + row) + (col + 1)
+  };
+}
+async function autoDetectImageGrid() {
+  const file = imageInput.files[0];
+  const status = document.getElementById("ocrStatus");
+
+  if (!file) {
+    alert("Choisis d'abord une image.");
+    return;
+  }
+
+  status.textContent = "Détection universelle de la grille...";
+
+  const img = new Image();
+  img.src = URL.createObjectURL(file);
+
+  img.onload = () => {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+    canvas.width = img.width;
+    canvas.height = img.height;
+
+    ctx.drawImage(img, 0, 0);
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+
+    const edges = detectGridLines(data, canvas.width, canvas.height);
+
+    if (!edges || !edges.vertical.length || !edges.horizontal.length) {
+      status.textContent = "Aucune grille détectée.";
+      alert("Impossible de détecter une grille. Essaie une capture plus nette.");
+      return;
+    }
+
+    const grid = estimateGridFromLines(edges.vertical, edges.horizontal);
+
+    if (!grid) {
+      status.textContent = "Grille trouvée mais impossible à calculer.";
+      alert("Grille détectée, mais taille impossible à estimer.");
+      return;
+    }
+
+    detectedGrid = grid;
+
+    SIZE = grid.size;
+    document.getElementById("gridSizeInput").value = SIZE;
+
+    board = readCellsFromDetectedGrid(ctx, grid);
+
+    createGrid();
+    solveBoard();
+
+    const json = {
+      version: 4,
+      game: "Battleship",
+      source: "universal-image-detection",
+      date: new Date().toISOString(),
+      size: SIZE,
+      detectedGrid: grid,
+      board
+    };
+
+    document.getElementById("jsonBox").value = JSON.stringify(json, null, 2);
+
+    status.textContent =
+      `Grille détectée : ${SIZE}x${SIZE}. JSON board généré.`;
+  };
+}
+
+function detectGridLines(data, width, height) {
+  const verticalScores = new Array(width).fill(0);
+  const horizontalScores = new Array(height).fill(0);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+
+      if (isGridColor(r, g, b)) {
+        verticalScores[x]++;
+        horizontalScores[y]++;
+      }
+    }
+  }
+
+  const vertical = extractLinePositions(verticalScores, height * 0.20);
+  const horizontal = extractLinePositions(horizontalScores, width * 0.20);
+
+  return {
+    vertical,
+    horizontal
+  };
+}
+function isGridColor(r, g, b) {
+  const brightness = (r + g + b) / 3;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const saturation = max - min;
+
+  const greenGrid =
+    g > 120 &&
+    g > r * 1.25 &&
+    g > b * 1.25;
+
+  const whiteGrid =
+    brightness > 180 &&
+    saturation < 70;
+
+  const blueGrid =
+    b > 120 &&
+    g > 100 &&
+    r < 140;
+
+  const yellowGrid =
+    r > 150 &&
+    g > 150 &&
+    b < 120;
+
+  const redGrid =
+    r > 150 &&
+    g < 100 &&
+    b < 100;
+
+  return greenGrid || whiteGrid || blueGrid || yellowGrid || redGrid;
+}
+function extractLinePositions(scores, threshold) {
+  const raw = [];
+
+  for (let i = 0; i < scores.length; i++) {
+    if (scores[i] > threshold) {
+      raw.push(i);
+    }
+  }
+
+  if (raw.length === 0) return [];
+
+  const groups = [];
+  let current = [raw[0]];
+
+  for (let i = 1; i < raw.length; i++) {
+    if (raw[i] - raw[i - 1] <= 3) {
+      current.push(raw[i]);
+    } else {
+      groups.push(current);
+      current = [raw[i]];
+    }
+  }
+
+  groups.push(current);
+
+  return groups.map(group => {
+    const sum = group.reduce((a, b) => a + b, 0);
+    return Math.round(sum / group.length);
+  });
+}
+function estimateGridFromLines(vertical, horizontal) {
+  if (vertical.length < 6 || horizontal.length < 6) {
+    return null;
+  }
+
+  const bestVertical = cleanRegularLines(vertical);
+  const bestHorizontal = cleanRegularLines(horizontal);
+
+  if (!bestVertical || !bestHorizontal) {
+    return null;
+  }
+
+  const cols = bestVertical.length - 1;
+  const rows = bestHorizontal.length - 1;
+
+  const size = Math.min(cols, rows);
+
+  if (size < 5 || size > 30) {
+    return null;
+  }
+
+  return {
+    x: bestVertical[0],
+    y: bestHorizontal[0],
+    width: bestVertical[bestVertical.length - 1] - bestVertical[0],
+    height: bestHorizontal[bestHorizontal.length - 1] - bestHorizontal[0],
+    cols,
+    rows,
+    size,
+    verticalLines: bestVertical,
+    horizontalLines: bestHorizontal
+  };
+}
+function cleanRegularLines(lines) {
+  if (lines.length < 6) return null;
+
+  lines = [...new Set(lines)].sort((a, b) => a - b);
+
+  let bestSet = null;
+  let bestScore = -Infinity;
+
+  for (let start = 0; start < lines.length; start++) {
+    for (let end = start + 5; end < lines.length; end++) {
+      const subset = lines.slice(start, end + 1);
+      const distances = [];
+
+      for (let i = 1; i < subset.length; i++) {
+        distances.push(subset[i] - subset[i - 1]);
+      }
+
+      const avg =
+        distances.reduce((a, b) => a + b, 0) / distances.length;
+
+      if (avg < 8) continue;
+
+      let error = 0;
+
+      for (const d of distances) {
+        error += Math.abs(d - avg);
+      }
+
+      const regularity = 1 / (1 + error);
+      const lengthBonus = subset.length * 10;
+      const score = regularity * 1000 + lengthBonus;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestSet = subset;
+      }
+    }
+  }
+
+  return bestSet;
+}
+function readCellsFromDetectedGrid(ctx, grid) {
+  const result = Array(grid.size * grid.size).fill("unknown");
+
+  const cellW = grid.width / grid.cols;
+  const cellH = grid.height / grid.rows;
+
+  for (let row = 0; row < grid.size; row++) {
+    for (let col = 0; col < grid.size; col++) {
+      const cx = Math.floor(grid.x + col * cellW + cellW / 2);
+      const cy = Math.floor(grid.y + row * cellH + cellH / 2);
+
+      const sample = sampleCell(ctx, cx, cy, cellW, cellH);
+      const index = coordToIndex(row, col);
+
+      if (sample.isRed) {
+        result[index] = "hit";
+      } else if (sample.isWhite || sample.isBlue) {
+        result[index] = "miss";
+      } else if (sample.isStrongGreen) {
+        result[index] = "hit";
+      } else {
+        result[index] = "unknown";
+      }
+    }
+  }
+
+  return result;
+}
+function sampleCell(ctx, cx, cy, cellW, cellH) {
+  const radiusX = Math.max(2, Math.floor(cellW * 0.25));
+  const radiusY = Math.max(2, Math.floor(cellH * 0.25));
+
+  let red = 0;
+  let white = 0;
+  let blue = 0;
+  let green = 0;
+  let total = 0;
+
+  for (let y = cy - radiusY; y <= cy + radiusY; y++) {
+    for (let x = cx - radiusX; x <= cx + radiusX; x++) {
+      const pixel = ctx.getImageData(x, y, 1, 1).data;
+
+      const r = pixel[0];
+      const g = pixel[1];
+      const b = pixel[2];
+
+      const brightness = (r + g + b) / 3;
+
+      if (r > 150 && g < 100 && b < 100) red++;
+      if (brightness > 190 && Math.abs(r - g) < 50 && Math.abs(g - b) < 50) white++;
+      if (b > 130 && g > 100 && r < 120) blue++;
+      if (g > 130 && g > r * 1.25 && g > b * 1.25) green++;
+
+      total++;
+    }
+  }
+
+  return {
+    isRed: red / total > 0.08,
+    isWhite: white / total > 0.12,
+    isBlue: blue / total > 0.10,
+    isStrongGreen: green / total > 0.18
+  };
+}
+
 
     function createGrid() {
       grid.innerHTML = "";
@@ -768,54 +1111,61 @@
     }
 
     function exportJSON() {
-      const data = {
-        version: 2,
-        game: "Battleship",
-        date: new Date().toISOString(),
-        size: SIZE,
-        board,
-        ships: SHIPS.map(ship => ({
-          id: ship.id,
-          name: ship.name,
-          size: ship.size,
-          active: document.getElementById("ship-" + ship.id).checked
-        }))
-      };
+  const data = {
+    version: 4,
+    game: "Battleship",
+    size: SIZE,
+    date: new Date().toISOString(),
+    board,
+    ships: ships.map(ship => ({
+      id: ship.id,
+      name: ship.name,
+      size: ship.size,
+      active: document.getElementById("ship-" + ship.id)?.checked ?? true
+    })),
+    detectedGrid
+  };
 
-      document.getElementById("jsonBox").value = JSON.stringify(data, null, 2);
+  document.getElementById("jsonBox").value = JSON.stringify(data, null, 2);
+}
+
+
+   function importJSON() {
+  try {
+    const text = document.getElementById("jsonBox").value;
+    const data = JSON.parse(text);
+
+    if (!data.board || !Array.isArray(data.board)) {
+      alert("JSON invalide : board manquant.");
+      return;
     }
 
-    function importJSON() {
-      try {
-        const text = document.getElementById("jsonBox").value;
-        const data = JSON.parse(text);
-
-        if (!data.board || !Array.isArray(data.board)) {
-          alert("JSON invalide : board manquant.");
-          return;
-        }
-
-        board = data.board.slice(0, SIZE * SIZE);
-
-        while (board.length < SIZE * SIZE) {
-          board.push("unknown");
-        }
-
-        if (data.ships) {
-          data.ships.forEach(savedShip => {
-            const checkbox = document.getElementById("ship-" + savedShip.id);
-            if (checkbox) {
-              checkbox.checked = savedShip.active;
-            }
-          });
-        }
-
-        solveBoard();
-      } catch (error) {
-        alert("Impossible d'importer le JSON.");
-        console.error(error);
-      }
+    if (data.size) {
+      SIZE = data.size;
+      document.getElementById("gridSizeInput").value = SIZE;
+    } else {
+      SIZE = Math.sqrt(data.board.length);
+      SIZE = Math.round(SIZE);
+      document.getElementById("gridSizeInput").value = SIZE;
     }
+
+    board = data.board.slice(0, SIZE * SIZE);
+
+    while (board.length < SIZE * SIZE) {
+      board.push("unknown");
+    }
+
+    detectedGrid = data.detectedGrid || null;
+
+    createGrid();
+    solveBoard();
+
+  } catch (error) {
+    console.error(error);
+    alert("Impossible d'importer le JSON.");
+  }
+}
+
 
     const imageInput = document.getElementById("imageInput");
     const preview = document.getElementById("preview");
