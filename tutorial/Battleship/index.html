@@ -6,111 +6,913 @@
 
   <title>Battleship Tutorial & Solver</title>
 
-  <link rel="stylesheet" href="style.css" />
-
-  <!-- Tesseract.js OCR gratuit -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #061826;
+      --panel: #0b2a3d;
+      --panel2: #103b55;
+      --cell: #1c6f94;
+      --cell-border: #4cb3d4;
+      --unknown: #1c6f94;
+      --miss: #dbeafe;
+      --hit: #ef4444;
+      --sunk: #7f1d1d;
+      --best: #facc15;
+      --text: #eaf8ff;
+      --muted: #9cc7d8;
+      --accent: #22d3ee;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background:
+        radial-gradient(circle at top, #0e4664, transparent 40%),
+        linear-gradient(180deg, #04121d, #061826);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 28px 15px;
+      text-align: center;
+      background: rgba(0, 0, 0, 0.25);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 28px;
+    }
+
+    header p {
+      margin: 8px 0 0;
+      color: var(--muted);
+    }
+
+    main {
+      max-width: 1200px;
+      margin: auto;
+      padding: 20px;
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 900px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    section {
+      background: rgba(11, 42, 61, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    }
+
+    h2, h3 {
+      margin-top: 0;
+    }
+
+    .toolbar,
+    .ship-list,
+    .buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 15px;
+    }
+
+    button,
+    select,
+    input[type="file"] {
+      border: none;
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: #155e75;
+      color: white;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    button:hover {
+      background: #0891b2;
+    }
+
+    button.active {
+      background: var(--accent);
+      color: #03202f;
+    }
+
+    button.danger {
+      background: #991b1b;
+    }
+
+    button.warning {
+      background: #ca8a04;
+      color: #111827;
+    }
+
+    .grid-wrapper {
+      overflow-x: auto;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 4px;
+      max-width: 640px;
+      min-width: 340px;
+      margin: auto;
+    }
+
+    .cell {
+      aspect-ratio: 1 / 1;
+      background: var(--unknown);
+      border: 1px solid var(--cell-border);
+      border-radius: 6px;
+      color: white;
+      font-size: 11px;
+      position: relative;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    .cell:hover {
+      outline: 2px solid var(--accent);
+    }
+
+    .cell.unknown {
+      background: var(--unknown);
+    }
+
+    .cell.miss {
+      background: var(--miss);
+      color: #0f172a;
+    }
+
+    .cell.hit {
+      background: var(--hit);
+      color: white;
+    }
+
+    .cell.sunk {
+      background: var(--sunk);
+      color: white;
+    }
+
+    .cell.best {
+      outline: 3px solid var(--best);
+      box-shadow: 0 0 14px var(--best);
+    }
+
+    .probability {
+      position: absolute;
+      inset: 0;
+      background: rgba(250, 204, 21, 0);
+      pointer-events: none;
+    }
+
+    .cell-label {
+      position: relative;
+      z-index: 2;
+      font-size: 11px;
+      font-weight: bold;
+      text-shadow: 0 1px 2px #000;
+    }
+
+    .ship-ghost {
+      position: absolute;
+      inset: 12%;
+      background: rgba(255, 255, 255, 0.18);
+      border: 1px dashed rgba(255,255,255,0.55);
+      border-radius: 20px;
+      pointer-events: none;
+    }
+
+    .legend {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+
+    .dot.unknown { background: var(--unknown); }
+    .dot.miss { background: var(--miss); }
+    .dot.hit { background: var(--hit); }
+    .dot.sunk { background: var(--sunk); }
+    .dot.best { background: var(--best); }
+
+    .ship-card {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--panel2);
+      padding: 10px;
+      border-radius: 12px;
+      min-width: 160px;
+    }
+
+    .ship-card input {
+      transform: scale(1.2);
+    }
+
+    .ship-name {
+      font-weight: bold;
+    }
+
+    .ship-size {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 160px;
+      border-radius: 12px;
+      border: none;
+      padding: 12px;
+      background: #020617;
+      color: #d1fae5;
+      resize: vertical;
+    }
+
+    .info-box {
+      background: rgba(255,255,255,0.06);
+      border-left: 4px solid var(--accent);
+      padding: 12px;
+      border-radius: 10px;
+      margin-bottom: 12px;
+    }
+
+    .status {
+      color: var(--muted);
+      font-size: 14px;
+      min-height: 20px;
+    }
+
+    img.preview {
+      max-width: 100%;
+      border-radius: 12px;
+      margin-top: 10px;
+      display: none;
+    }
+
+    .small {
+      font-size: 13px;
+      color: var(--muted);
+    }
+  </style>
 </head>
 
 <body>
-  <header class="hero">
-    <h1 id="title">🚢 Battleship Tutorial & Solver</h1>
-    <p id="subtitle">
-      Analyse intelligente des possibilités de placement des bateaux.
-    </p>
-
-    <div class="toolbar">
-      <label for="languageSelect">🌍 Langue</label>
-      <select id="languageSelect">
-        <option value="fr">Français</option>
-        <option value="en">English</option>
-        <option value="es">Español</option>
-        <option value="de">Deutsch</option>
-      </select>
-    </div>
+  <header>
+    <h1>🚢 Battleship Tutorial & Solver</h1>
+    <p>Analyse toutes les positions possibles et conseille le meilleur tir.</p>
   </header>
 
-  <main class="layout">
+  <main>
+    <section>
+      <h2>Grille</h2>
 
-    <section class="panel">
-      <h2 id="gridTitle">Grille</h2>
-
-      <div class="mode-buttons">
-        <button class="mode active" data-mode="unknown">❔ Inconnu</button>
-        <button class="mode" data-mode="miss">🌊 Eau</button>
-        <button class="mode" data-mode="hit">🔥 Touché</button>
-        <button class="mode" data-mode="sunk">💀 Coulé</button>
+      <div class="toolbar">
+        <button id="modeUnknown" class="active" onclick="setMode('unknown')">❔ Inconnu</button>
+        <button id="modeMiss" onclick="setMode('miss')">🌊 Eau</button>
+        <button id="modeHit" onclick="setMode('hit')">🔥 Touché</button>
+        <button id="modeSunk" onclick="setMode('sunk')">💀 Coulé</button>
+        <button onclick="solveBoard()">🧠 Calculer</button>
+        <button class="warning" onclick="autoWaterAroundSunk()">🌊 Eau autour coulés</button>
+        <button class="danger" onclick="resetBoard()">Réinitialiser</button>
       </div>
 
-      <div id="board" class="board"></div>
+      <div class="grid-wrapper">
+        <div id="grid" class="grid"></div>
+      </div>
 
       <div class="legend">
-        <span><b class="box unknown"></b> Inconnu</span>
-        <span><b class="box miss"></b> Eau</span>
-        <span><b class="box hit"></b> Touché</span>
-        <span><b class="box sunk"></b> Coulé</span>
-        <span><b class="box best"></b> Meilleur tir</span>
+        <span><i class="dot unknown"></i> Inconnu</span>
+        <span><i class="dot miss"></i> Eau</span>
+        <span><i class="dot hit"></i> Touché</span>
+        <span><i class="dot sunk"></i> Coulé</span>
+        <span><i class="dot best"></i> Meilleur tir</span>
       </div>
     </section>
 
-    <section class="panel">
+    <section>
       <h2>Bateaux restants</h2>
-      <div id="ships"></div>
 
-      <hr />
+      <div id="ships" class="ship-list"></div>
 
-      <h2>Analyse</h2>
-      <p>Placements possibles : <strong id="totalPlacements">0</strong></p>
-      <p>Meilleur tir : <strong id="bestShot">Aucun</strong></p>
-      <p>Score : <strong id="bestScore">0</strong></p>
-
-      <button id="recalculateBtn">🧠 Recalculer</button>
-      <button id="resetBtn">♻️ Réinitialiser</button>
-    </section>
-
-    <section class="panel wide">
-      <h2>Import / Export JSON</h2>
-
-      <div class="json-buttons">
-        <button id="exportBtn">📤 Exporter JSON</button>
-        <button id="importBtn">📥 Importer JSON</button>
+      <div class="info-box">
+        <strong>Meilleur tir :</strong>
+        <div id="bestShot">Aucun calcul pour l’instant.</div>
       </div>
 
-      <textarea id="jsonArea" placeholder="JSON ici..."></textarea>
-    </section>
+      <div class="info-box">
+        <strong>Statistiques :</strong>
+        <div id="stats">Aucune donnée.</div>
+      </div>
 
-    <section class="panel wide">
-      <h2>Analyse image / capture écran</h2>
+      <h3>Import / Export JSON</h3>
+
+      <div class="buttons">
+        <button onclick="exportJSON()">Exporter JSON</button>
+        <button onclick="importJSON()">Importer JSON</button>
+      </div>
+
+      <textarea id="jsonBox" placeholder="Le JSON apparaîtra ici..."></textarea>
+
+      <h3>Analyse image avec Tesseract.js</h3>
 
       <input type="file" id="imageInput" accept="image/*" />
-
-      <div class="json-buttons">
-        <button id="ocrBtn">🔎 Lire avec Tesseract.js</button>
-        <button id="colorDetectBtn">🎨 Détecter par couleurs</button>
+      <div class="buttons">
+        <button onclick="runOCR()">Analyser image</button>
       </div>
 
-      <textarea id="ocrOutput" placeholder="Résultat OCR..."></textarea>
+      <div id="ocrStatus" class="status"></div>
+      <img id="preview" class="preview" />
 
-      <p class="hint">
-        Tesseract lit le texte. Pour une grille colorée, utilise plutôt
-        « Détecter par couleurs ».
+      <p class="small">
+        Tesseract.js peut lire du texte sur une capture.  
+        Pour reconnaître parfaitement les cases, il faudra idéalement une capture bien droite et nette.
       </p>
     </section>
-
-    <section class="panel wide">
-      <h2>Tutoriel rapide</h2>
-
-      <ol id="tutorial">
-        <li>Choisis un mode : eau, touché ou coulé.</li>
-        <li>Clique sur les cases de la grille.</li>
-        <li>Quand un bateau est coulé, les cases autour deviennent automatiquement de l’eau.</li>
-        <li>Le solveur calcule toutes les positions possibles des bateaux restants.</li>
-        <li>La case jaune est le meilleur tir conseillé.</li>
-      </ol>
-    </section>
-
   </main>
 
-  <script src="script.js"></script>
+  <script>
+    const SIZE = 10;
+
+    const SHIPS = [
+      {
+        id: "carrier",
+        name: "Porte-avions",
+        size: 5
+      },
+      {
+        id: "battleship",
+        name: "Cuirassé",
+        size: 4
+      },
+      {
+        id: "cruiser",
+        name: "Croiseur",
+        size: 3
+      },
+      {
+        id: "submarine",
+        name: "Sous-marin",
+        size: 3
+      },
+      {
+        id: "destroyer",
+        name: "Destroyer",
+        size: 2
+      }
+    ];
+
+    let board = Array(SIZE * SIZE).fill("unknown");
+    let mode = "unknown";
+    let probabilities = Array(SIZE * SIZE).fill(0);
+    let bestIndex = null;
+    let allPlacements = [];
+
+    const grid = document.getElementById("grid");
+    const shipsContainer = document.getElementById("ships");
+
+    function indexToCoord(index) {
+      const row = Math.floor(index / SIZE);
+      const col = index % SIZE;
+      return {
+        row,
+        col,
+        label: String.fromCharCode(65 + col) + (row + 1)
+      };
+    }
+
+    function coordToIndex(row, col) {
+      return row * SIZE + col;
+    }
+
+    function createGrid() {
+      grid.innerHTML = "";
+
+      for (let i = 0; i < SIZE * SIZE; i++) {
+        const cell = document.createElement("div");
+        cell.className = "cell unknown";
+        cell.dataset.index = i;
+
+        const probabilityLayer = document.createElement("div");
+        probabilityLayer.className = "probability";
+
+        const label = document.createElement("div");
+        label.className = "cell-label";
+        label.textContent = indexToCoord(i).label;
+
+        cell.appendChild(probabilityLayer);
+        cell.appendChild(label);
+
+        cell.addEventListener("click", () => {
+          board[i] = mode;
+          solveBoard();
+        });
+
+        grid.appendChild(cell);
+      }
+
+      renderBoard();
+    }
+
+    function createShips() {
+      shipsContainer.innerHTML = "";
+
+      SHIPS.forEach(ship => {
+        const card = document.createElement("label");
+        card.className = "ship-card";
+
+        card.innerHTML = `
+          <input type="checkbox" id="ship-${ship.id}" checked onchange="solveBoard()" />
+          <div>
+            <div class="ship-name">${ship.name}</div>
+            <div class="ship-size">Taille ${ship.size}</div>
+          </div>
+        `;
+
+        shipsContainer.appendChild(card);
+      });
+    }
+
+    function setMode(newMode) {
+      mode = newMode;
+
+      ["Unknown", "Miss", "Hit", "Sunk"].forEach(m => {
+        document.getElementById("mode" + m).classList.remove("active");
+      });
+
+      const id = "mode" + newMode.charAt(0).toUpperCase() + newMode.slice(1);
+      document.getElementById(id).classList.add("active");
+    }
+
+    function renderBoard() {
+      const cells = document.querySelectorAll(".cell");
+      const maxProbability = Math.max(...probabilities, 1);
+
+      cells.forEach((cell, i) => {
+        cell.className = "cell " + board[i];
+
+        if (i === bestIndex) {
+          cell.classList.add("best");
+        }
+
+        const probabilityLayer = cell.querySelector(".probability");
+        const label = cell.querySelector(".cell-label");
+
+        const opacity = probabilities[i] / maxProbability;
+        probabilityLayer.style.background = `rgba(250, 204, 21, ${opacity * 0.65})`;
+
+        if (probabilities[i] > 0 && board[i] === "unknown") {
+          label.textContent = probabilities[i];
+        } else {
+          label.textContent = indexToCoord(i).label;
+        }
+
+        const oldGhosts = cell.querySelectorAll(".ship-ghost");
+        oldGhosts.forEach(g => g.remove());
+      });
+
+      renderGhostShips();
+    }
+
+    function getActiveShips() {
+      return SHIPS.filter(ship => {
+        const checkbox = document.getElementById("ship-" + ship.id);
+        return checkbox && checkbox.checked;
+      });
+    }
+
+    function canPlaceShip(cells) {
+      for (const index of cells) {
+        if (board[index] === "miss") return false;
+        if (board[index] === "sunk") return false;
+      }
+
+      return true;
+    }
+
+    function placementTouchesHits(cells) {
+      const hitIndexes = board
+        .map((state, i) => state === "hit" ? i : null)
+        .filter(v => v !== null);
+
+      if (hitIndexes.length === 0) return true;
+
+      return hitIndexes.some(hit => cells.includes(hit));
+    }
+
+    function generatePlacementsForShip(ship) {
+      const placements = [];
+
+      for (let row = 0; row < SIZE; row++) {
+        for (let col = 0; col < SIZE; col++) {
+          const horizontal = [];
+
+          for (let k = 0; k < ship.size; k++) {
+            const c = col + k;
+            if (c < SIZE) {
+              horizontal.push(coordToIndex(row, c));
+            }
+          }
+
+          if (horizontal.length === ship.size && canPlaceShip(horizontal)) {
+            placements.push({
+              ship,
+              cells: horizontal,
+              direction: "horizontal"
+            });
+          }
+
+          const vertical = [];
+
+          for (let k = 0; k < ship.size; k++) {
+            const r = row + k;
+            if (r < SIZE) {
+              vertical.push(coordToIndex(r, col));
+            }
+          }
+
+          if (vertical.length === ship.size && canPlaceShip(vertical)) {
+            placements.push({
+              ship,
+              cells: vertical,
+              direction: "vertical"
+            });
+          }
+        }
+      }
+
+      return placements;
+    }
+
+    function solveBoard() {
+      probabilities = Array(SIZE * SIZE).fill(0);
+      bestIndex = null;
+      allPlacements = [];
+
+      const activeShips = getActiveShips();
+
+      activeShips.forEach(ship => {
+        const placements = generatePlacementsForShip(ship);
+        allPlacements.push(...placements);
+
+        placements.forEach(placement => {
+          let weight = 1;
+
+          const hitCount = placement.cells.filter(i => board[i] === "hit").length;
+
+          if (hitCount > 0) {
+            weight += hitCount * 8;
+          }
+
+          placement.cells.forEach(index => {
+            if (board[index] === "unknown") {
+              probabilities[index] += weight;
+            }
+          });
+        });
+      });
+
+      let max = 0;
+
+      probabilities.forEach((value, index) => {
+        if (value > max && board[index] === "unknown") {
+          max = value;
+          bestIndex = index;
+        }
+      });
+
+      renderBoard();
+      updateInfo();
+    }
+
+    function updateInfo() {
+      const bestShot = document.getElementById("bestShot");
+      const stats = document.getElementById("stats");
+
+      if (bestIndex === null) {
+        bestShot.innerHTML = "Aucune case trouvée.";
+      } else {
+        const coord = indexToCoord(bestIndex);
+        bestShot.innerHTML = `
+          <strong>${coord.label}</strong><br>
+          Ligne ${coord.row + 1}, colonne ${coord.col + 1}<br>
+          Score : ${probabilities[bestIndex]}
+        `;
+      }
+
+      stats.innerHTML = `
+        Bateaux actifs : ${getActiveShips().length}<br>
+        Placements possibles : ${allPlacements.length}<br>
+        Cases touchées : ${board.filter(x => x === "hit").length}<br>
+        Cases à l’eau : ${board.filter(x => x === "miss").length}<br>
+        Cases coulées : ${board.filter(x => x === "sunk").length}
+      `;
+    }
+
+    function renderGhostShips() {
+      const cells = document.querySelectorAll(".cell");
+
+      const topPlacements = [...allPlacements]
+        .sort((a, b) => {
+          const scoreA = a.cells.reduce((sum, i) => sum + probabilities[i], 0);
+          const scoreB = b.cells.reduce((sum, i) => sum + probabilities[i], 0);
+          return scoreB - scoreA;
+        })
+        .slice(0, 25);
+
+      topPlacements.forEach(placement => {
+        placement.cells.forEach(index => {
+          if (board[index] === "unknown" || board[index] === "hit") {
+            const ghost = document.createElement("div");
+            ghost.className = "ship-ghost";
+            cells[index].appendChild(ghost);
+          }
+        });
+      });
+    }
+
+    function getNeighborsAroundCells(cells) {
+      const result = new Set();
+
+      cells.forEach(index => {
+        const { row, col } = indexToCoord(index);
+
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            const nr = row + dr;
+            const nc = col + dc;
+
+            if (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE) {
+              const ni = coordToIndex(nr, nc);
+
+              if (!cells.includes(ni)) {
+                result.add(ni);
+              }
+            }
+          }
+        }
+      });
+
+      return [...result];
+    }
+
+    function findSunkGroups() {
+      const visited = new Set();
+      const groups = [];
+
+      for (let i = 0; i < board.length; i++) {
+        if (board[i] !== "sunk" || visited.has(i)) continue;
+
+        const group = [];
+        const stack = [i];
+
+        while (stack.length > 0) {
+          const current = stack.pop();
+
+          if (visited.has(current)) continue;
+          visited.add(current);
+          group.push(current);
+
+          const { row, col } = indexToCoord(current);
+
+          const neighbors = [
+            [row - 1, col],
+            [row + 1, col],
+            [row, col - 1],
+            [row, col + 1]
+          ];
+
+          neighbors.forEach(([r, c]) => {
+            if (r >= 0 && r < SIZE && c >= 0 && c < SIZE) {
+              const ni = coordToIndex(r, c);
+              if (board[ni] === "sunk" && !visited.has(ni)) {
+                stack.push(ni);
+              }
+            }
+          });
+        }
+
+        groups.push(group);
+      }
+
+      return groups;
+    }
+
+    function autoWaterAroundSunk() {
+      const groups = findSunkGroups();
+
+      groups.forEach(group => {
+        const around = getNeighborsAroundCells(group);
+
+        around.forEach(index => {
+          if (board[index] === "unknown") {
+            board[index] = "miss";
+          }
+        });
+      });
+
+      solveBoard();
+    }
+
+    function resetBoard() {
+      if (!confirm("Réinitialiser toute la grille ?")) return;
+
+      board = Array(SIZE * SIZE).fill("unknown");
+      probabilities = Array(SIZE * SIZE).fill(0);
+      bestIndex = null;
+      allPlacements = [];
+
+      SHIPS.forEach(ship => {
+        const checkbox = document.getElementById("ship-" + ship.id);
+        checkbox.checked = true;
+      });
+
+      renderBoard();
+      updateInfo();
+    }
+
+    function exportJSON() {
+      const data = {
+        version: 2,
+        game: "Battleship",
+        date: new Date().toISOString(),
+        size: SIZE,
+        board,
+        ships: SHIPS.map(ship => ({
+          id: ship.id,
+          name: ship.name,
+          size: ship.size,
+          active: document.getElementById("ship-" + ship.id).checked
+        }))
+      };
+
+      document.getElementById("jsonBox").value = JSON.stringify(data, null, 2);
+    }
+
+    function importJSON() {
+      try {
+        const text = document.getElementById("jsonBox").value;
+        const data = JSON.parse(text);
+
+        if (!data.board || !Array.isArray(data.board)) {
+          alert("JSON invalide : board manquant.");
+          return;
+        }
+
+        board = data.board.slice(0, SIZE * SIZE);
+
+        while (board.length < SIZE * SIZE) {
+          board.push("unknown");
+        }
+
+        if (data.ships) {
+          data.ships.forEach(savedShip => {
+            const checkbox = document.getElementById("ship-" + savedShip.id);
+            if (checkbox) {
+              checkbox.checked = savedShip.active;
+            }
+          });
+        }
+
+        solveBoard();
+      } catch (error) {
+        alert("Impossible d'importer le JSON.");
+        console.error(error);
+      }
+    }
+
+    const imageInput = document.getElementById("imageInput");
+    const preview = document.getElementById("preview");
+
+    imageInput.addEventListener("change", () => {
+      const file = imageInput.files[0];
+
+      if (!file) return;
+
+      preview.src = URL.createObjectURL(file);
+      preview.style.display = "block";
+    });
+
+    async function runOCR() {
+      const file = imageInput.files[0];
+      const status = document.getElementById("ocrStatus");
+
+      if (!file) {
+        alert("Choisis d'abord une image.");
+        return;
+      }
+
+      status.textContent = "Analyse OCR en cours avec Tesseract.js...";
+
+      try {
+        const result = await Tesseract.recognize(
+          file,
+          "eng+fra",
+          {
+            logger: m => {
+              if (m.status) {
+                const percent = m.progress
+                  ? Math.round(m.progress * 100)
+                  : 0;
+
+                status.textContent = `${m.status} ${percent}%`;
+              }
+            }
+          }
+        );
+
+        const text = result.data.text;
+        status.textContent = "Analyse terminée.";
+
+        document.getElementById("jsonBox").value =
+          JSON.stringify({
+            type: "ocr-result",
+            date: new Date().toISOString(),
+            text
+          }, null, 2);
+
+        interpretOCRText(text);
+
+      } catch (error) {
+        console.error(error);
+        status.textContent = "Erreur pendant l'analyse OCR.";
+      }
+    }
+
+    function interpretOCRText(text) {
+      const lower = text.toLowerCase();
+
+      const coordRegex = /([a-j])\s*([1-9]|10)/gi;
+      const matches = [...text.matchAll(coordRegex)];
+
+      matches.forEach(match => {
+        const letter = match[1].toUpperCase();
+        const number = parseInt(match[2], 10);
+
+        const col = letter.charCodeAt(0) - 65;
+        const row = number - 1;
+
+        if (row >= 0 && row < SIZE && col >= 0 && col < SIZE) {
+          const index = coordToIndex(row, col);
+
+          if (
+            lower.includes("touch") ||
+            lower.includes("hit") ||
+            lower.includes("feu")
+          ) {
+            board[index] = "hit";
+          } else if (
+            lower.includes("eau") ||
+            lower.includes("miss") ||
+            lower.includes("rat")
+          ) {
+            board[index] = "miss";
+          }
+        }
+      });
+
+      solveBoard();
+    }
+
+    createGrid();
+    createShips();
+    solveBoard();
+  </script>
 </body>
 </html>
